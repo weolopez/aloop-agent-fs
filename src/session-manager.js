@@ -1,6 +1,7 @@
 // session-manager.js
 // Persistent session management for continuous assistant mode
 // Sessions are stored in GitHub for cross-device persistence
+// Integrates with MemoryManager for memory flush before compaction
 
 import { logWithPersona } from './persona.js';
 
@@ -25,6 +26,7 @@ export class SessionManager {
    * @param {string} options.sessionPath - Path for session storage (default: 'agent/sessions')
    * @param {number} options.maxMessagesBeforeCompaction - Trigger compaction after this many messages
    * @param {number} options.autoSaveInterval - Auto-save every N messages
+   * @param {Object} options.memoryManager - MemoryManager instance for memory flush
    */
   constructor(fs, options = {}) {
     this.fs = fs;
@@ -32,10 +34,20 @@ export class SessionManager {
       sessionPath: 'agent/sessions',
       maxMessagesBeforeCompaction: 50,
       autoSaveInterval: 5,
+      memoryManager: null,
       ...options
     };
     this.currentSession = null;
     this.isDirty = false;
+    this.memoryManager = this.options.memoryManager;
+  }
+
+  /**
+   * Set the memory manager (can be set after construction)
+   * @param {Object} memoryManager - MemoryManager instance
+   */
+  setMemoryManager(memoryManager) {
+    this.memoryManager = memoryManager;
   }
 
   /**
@@ -145,6 +157,7 @@ export class SessionManager {
 
   /**
    * Compact history by summarizing old messages
+   * IMPORTANT: Flushes memory before compaction to preserve important context
    * @param {Function} summarizer - Async function that takes messages and returns summary
    * @returns {Promise<void>}
    */
@@ -163,6 +176,16 @@ export class SessionManager {
     }
     
     logWithPersona(`Compacting ${messagesToCompact.length} messages...`, 'action');
+    
+    // MEMORY FLUSH: Before compacting, give the agent a chance to save important info
+    if (this.memoryManager) {
+      logWithPersona('Flushing memory before compaction...', 'action');
+      try {
+        await this.memoryManager.flushToMemory(messagesToCompact, summarizer);
+      } catch (e) {
+        logWithPersona(`Memory flush warning: ${e.message}`, 'warning');
+      }
+    }
     
     // Generate summary
     let summary;

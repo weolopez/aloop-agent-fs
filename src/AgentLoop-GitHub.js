@@ -2,10 +2,12 @@
 // Enhanced AgentLoop that uses GitHub as persistent file system.
 // This version integrates githubFSTools to enable the agent to save/retrieve data from a GitHub repo.
 // Now includes Navigator persona for a personality-driven assistant experience.
+// Memory system allows persistent context across sessions via Markdown files.
 
 import { fetchGemini } from './llm-tools.js';
 import { githubFSTools, getGitHubFSToolsDescription } from './github-fs-tools.js';
 import { getSystemPersona, logWithPersona, PERSONA } from './persona.js';
+import { createMemoryTools } from './memory-tools.js';
 
 /**
  * @typedef {Object} AgentState
@@ -32,6 +34,7 @@ class AgentLoopGitHub {
    * @param {boolean} [options.verbose=true] - Enable verbose logging.
    * @param {Object} [options.userProfile=null] - User profile for personalization.
    * @param {boolean} [options.skipConfirmation=false] - Skip goal confirmation step.
+   * @param {Object} [options.memoryManager=null] - MemoryManager instance for persistent memory.
    */
   constructor(user_goal, additionalTools = [], options = {}) {
     this.user_goal = user_goal;
@@ -44,12 +47,21 @@ class AgentLoopGitHub {
       verbose: true,
       userProfile: null,
       skipConfirmation: false,
+      memoryManager: null,
       ...options
     };
     this.maxIterations = this.options.maxIterations;
+    this.memoryManager = this.options.memoryManager;
     
-    // Combine GitHub FS tools with any additional tools
-    const allTools = [...githubFSTools, ...additionalTools];
+    // Combine GitHub FS tools with memory tools and any additional tools
+    let allTools = [...githubFSTools, ...additionalTools];
+    
+    // Add memory tools if memory manager is available
+    if (this.memoryManager) {
+      const memoryTools = createMemoryTools(this.memoryManager);
+      allTools = [...allTools, ...memoryTools];
+    }
+    
     this.tools = new Map(allTools.map(tool => [tool.name, tool]));
     
     this.status = 'running';
@@ -94,18 +106,33 @@ class AgentLoopGitHub {
     });
   }
 
-  // Build the prompt for the LLM, including persona, history and instructions.
+  // Build the prompt for the LLM, including persona, memory, history and instructions.
   buildPrompt() {
     const toolDescriptions = Array.from(this.tools.values())
-      .map(t => `${t.name}: ${t.description}`)
+      .map(t => `${t.name}: ${t.description.split('\n')[0]}`) // First line only for brevity
       .join('\n');
 
     const fsDescription = getGitHubFSToolsDescription();
     
     // Get persona with optional user profile
     const persona = getSystemPersona(this.options.userProfile);
+    
+    // Get memory context if available
+    let memoryContext = '';
+    if (this.memoryManager && this.memoryManager.initialized) {
+      memoryContext = this.memoryManager.buildMemoryContext({
+        includeSoul: false, // Soul is already in persona
+        includeUser: true,
+        includeIdentity: true,
+        includeMemory: true,
+        includeDailyLogs: true
+      });
+      if (memoryContext) {
+        memoryContext = `\n\n---\n\n## YOUR MEMORY (from previous sessions)\n\n${memoryContext}`;
+      }
+    }
 
-    let prompt = `${persona}
+    let prompt = `${persona}${memoryContext}
 
 ---
 
@@ -123,6 +150,7 @@ REASONING FRAMEWORK:
 4. Take exactly ONE action per turn in <action> tags with JSON: {"tool": "tool_name", "params": {...}}
 5. When the goal is fully achieved, provide your answer in <final_answer> tags
 6. Do not output anything outside of these tags
+7. Use memory tools (memory_remember, memory_log) to save important information for future sessions
 
 CONVERSATION HISTORY:
 `;

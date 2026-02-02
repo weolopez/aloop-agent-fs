@@ -1,11 +1,13 @@
 // agent-shell.js
 // Continuous conversation mode for browser
 // Provides an interactive shell instead of one-shot execution
+// Now includes memory system for persistent context across sessions
 
 import AgentLoopGitHub from './AgentLoop-GitHub.js';
 import { GitHubFileSystem, loadGitHubFSConfig } from './GitHubFileSystem.js';
 import { SessionManager } from './session-manager.js';
 import { UserProfile } from './user-profile.js';
+import { MemoryManager } from './memory-manager.js';
 import { analyzeGoal, formatGoalConfirmation, shouldConfirm } from './goal-alignment.js';
 import { PERSONA, logWithPersona } from './persona.js';
 
@@ -44,6 +46,7 @@ export class AgentShell {
     this.fs = null;
     this.session = null;
     this.profile = null;
+    this.memory = null;  // Memory manager for persistent context
     this.agent = null;
     this.isReady = false;
     this.isThinking = false;
@@ -51,7 +54,7 @@ export class AgentShell {
   }
 
   /**
-   * Initialize the shell - connect to GitHub, load session and profile
+   * Initialize the shell - connect to GitHub, load session, profile, and memory
    * @returns {Promise<AgentShell>}
    */
   async initialize() {
@@ -67,8 +70,19 @@ export class AgentShell {
       // Initialize GitHub file system
       this.fs = new GitHubFileSystem(config);
       
-      // Initialize session manager
-      this.session = new SessionManager(this.fs);
+      // Initialize memory manager (load persistent memory from GitHub)
+      this.memory = new MemoryManager(this.fs);
+      await this.memory.initialize();
+      
+      // If this is first run, set up memory structure
+      const memStats = this.memory.getStats();
+      if (!memStats.hasSoul && !memStats.hasUser) {
+        logWithPersona('First run detected, initializing memory structure...', 'action');
+        await this.memory.initializeMemoryStructure();
+      }
+      
+      // Initialize session manager with memory integration
+      this.session = new SessionManager(this.fs, { memoryManager: this.memory });
       await this.session.loadOrCreateSession('main');
       
       // Initialize user profile
@@ -78,13 +92,17 @@ export class AgentShell {
       // Update stats
       this.profile.incrementStat('sessionsStarted');
       
+      // Log session start to daily log
+      await this.memory.writeDailyLog('Session started', 'Session');
+      
       this.isReady = true;
       
       const readyInfo = {
         sessionId: this.session.currentSession.id,
         userName: this.profile.profile.name,
         messageCount: this.session.currentSession.messageCount,
-        greeting: this.profile.getGreeting()
+        greeting: this.profile.getGreeting(),
+        memoryStatus: this.memory.getStats()
       };
       
       this._emit('ready', readyInfo);
@@ -145,10 +163,11 @@ export class AgentShell {
       // Track common tasks
       await this.profile.trackTask(message);
       
-      // Create agent for this goal
+      // Create agent for this goal with memory integration
       this.agent = new AgentLoopGitHub(message, [], {
         skipConfirmation: true, // We already confirmed above
         userProfile: this.profile.profile,
+        memoryManager: this.memory,  // Pass memory manager for context injection and tools
         verbose: true
       });
       
@@ -266,6 +285,49 @@ export class AgentShell {
         result = 'Session history compacted.';
         break;
         
+      case 'memory':
+        const memStats = this.memory.getStats();
+        result = `**Memory Status**
+- Soul (SOUL.md): ${memStats.hasSoul ? '✓ Loaded' : '○ Using defaults'}
+- User (USER.md): ${memStats.hasUser ? '✓ Loaded' : '○ Empty'}
+- Identity (IDENTITY.md): ${memStats.hasIdentity ? '✓ Loaded' : '○ Empty'}
+- Long-term (MEMORY.md): ${memStats.hasMemory ? `✓ ${memStats.memorySize} bytes` : '○ Empty'}
+- Today's Log: ${memStats.hasTodayLog ? `✓ ${memStats.todayLogSize} bytes` : '○ Empty'}
+- Yesterday's Log: ${memStats.hasYesterdayLog ? '✓ Available' : '○ Not loaded'}`;
+        break;
+        
+      case 'remember':
+        if (args.length === 0) {
+          result = 'Usage: /remember <something to remember>';
+        } else {
+          const memoryContent = args.join(' ');
+          await this.memory.writeMemory(memoryContent, 'User Request');
+          result = `Got it, I'll remember: "${memoryContent}"`;
+        }
+        break;
+        
+      case 'recall':
+        if (args.length === 0) {
+          result = 'Usage: /recall <search term>';
+        } else {
+          const searchQuery = args.join(' ');
+          const searchResults = await this.memory.search(searchQuery);
+          if (searchResults.length === 0) {
+            result = `No memories found matching "${searchQuery}"`;
+          } else {
+            result = `**Found ${searchResults.length} result(s):**\n`;
+            for (const r of searchResults.slice(0, 3)) {
+              result += `\n**${r.file}:**\n${r.matches.slice(0, 2).join('\n---\n')}\n`;
+            }
+          }
+        }
+        break;
+        
+      case 'soul':
+        const soul = this.memory.getSoul();
+        result = soul ? `**Current Soul:**\n${soul.substring(0, 1000)}${soul.length > 1000 ? '...' : ''}` : 'No custom soul configured.';
+        break;
+        
       case 'sessions':
         const sessions = await this.session.listSessions();
         result = sessions.length > 0
@@ -295,6 +357,12 @@ export class AgentShell {
 - \`/sessions\` - List all saved sessions
 - \`/load <id>\` - Load a saved session
 - \`/compact\` - Compress old messages
+
+**Memory (persists across sessions):**
+- \`/memory\` - Show memory status
+- \`/remember <fact>\` - Save to long-term memory
+- \`/recall <term>\` - Search memory for something
+- \`/soul\` - View agent personality (SOUL.md)
 
 **Profile:**
 - \`/name <name>\` - Set your name
@@ -351,6 +419,14 @@ export class AgentShell {
    */
   getProfile() {
     return this.profile?.profile || null;
+  }
+
+  /**
+   * Get the memory manager
+   * @returns {MemoryManager|null}
+   */
+  getMemory() {
+    return this.memory || null;
   }
 
   /**
