@@ -1,0 +1,25 @@
+{
+  "id": "main",
+  "createdAt": "2026-02-02T17:32:28.761Z",
+  "lastActive": "2026-02-02T17:33:10.825Z",
+  "messageCount": 3,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello, my name is weo",
+      "timestamp": "2026-02-02T17:33:03.100Z"
+    },
+    {
+      "role": "assistant",
+      "content": "<thought>I'll start by listing the files in the repository to see if there's already a place where I store user information.</thought>",
+      "timestamp": "2026-02-02T17:33:10.822Z"
+    },
+    {
+      "role": "assistant",
+      "content": "<final_answer>Nice to meet you, weo. I've noted your name in my records. What are we working on today? 🧭</final_answer>",
+      "timestamp": "2026-02-02T17:33:10.822Z"
+    }
+  ],
+  "summaries": [],
+  "context": {}
+}
