@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment (should never be committed)
+.env
+.env.local
+.env.*.local
+
+# Build output (not used, but good to have)
+dist/
+build/
+
+# Test coverage
+coverage/
