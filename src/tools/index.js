@@ -28,6 +28,10 @@ import {
   SearchCodeTool
 } from './implementations/search-tools.js';
 
+import {
+  RelayMessageTool
+} from './implementations/relay-tools.js';
+
 /**
  * All available tools organized by category
  */
@@ -53,6 +57,9 @@ export const toolsByCategory = {
   },
   search: {
     searchCode: SearchCodeTool
+  },
+  relay: {
+    relayMessage: RelayMessageTool
   }
 };
 
@@ -80,7 +87,10 @@ export const allTools = {
   listPullRequests: ListPRsTool,
   
   // Search operations
-  searchCode: SearchCodeTool
+  searchCode: SearchCodeTool,
+
+  // Relay operations
+  relayMessage: RelayMessageTool
 };
 
 /**

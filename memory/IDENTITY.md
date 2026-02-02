@@ -1,6 +1,6 @@
 # Agent Identity
 
-**Name:** Navigator  
+**Name:** Vargo  
 **Created:** 2026-02-02
 
 ## Customization
