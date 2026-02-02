@@ -3,83 +3,553 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent Loop Demo</title>
+    <title>GitHub File System Agent - Setup & Demo</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; background: #f0f0f0; }
-        #app { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .input-group { display: flex; gap: 1rem; margin-bottom: 1rem; }
-        input[type="text"] { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        button:disabled { background: #ccc; }
-        #log { margin-top: 1rem; border-top: 1px solid #eee; padding-top: 1rem; }
-        .entry { margin-bottom: 1rem; padding: 1rem; border-radius: 4px; border: 1px solid #eee; }
-        .entry.user { background: #e3f2fd; }
-        .entry.assistant { background: #f5f5f5; border-left: 4px solid #2196f3; }
-        .entry.tool { background: #fff3e0; border-left: 4px solid #ff9800; font-family: monospace; white-space: pre-wrap; }
-        .thought { color: #666; font-style: italic; margin-bottom: 0.5rem; }
-        .action { font-weight: bold; color: #d32f2f; }
-        .final { font-weight: bold; color: #2e7d32; font-size: 1.1em; }
-        .error { color: #c62828; background: #ffebee; padding: 1rem; border-radius: 4px; }
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            max-width: 900px; 
+            margin: 0 auto; 
+            padding: 2rem; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 { 
+            color: #667eea; 
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        h2 {
+            color: #444;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+            margin-top: 2rem;
+        }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            font-weight: 500;
+        }
+        
+        .status.pending {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            color: #856404;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+        
+        .setup-section {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .step {
+            margin: 1.5rem 0;
+        }
+        
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+        
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin: 0.5rem 0;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        button.secondary {
+            background: #6c757d;
+        }
+        
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+            align-items: end;
+        }
+        
+        .input-group input {
+            flex: 1;
+            margin: 0;
+        }
+        
+        .form-field {
+            margin: 1rem 0;
+        }
+        
+        .form-field label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #444;
+        }
+        
+        .form-field small {
+            display: block;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        
+        #log {
+            margin-top: 1rem;
+            border-top: 2px solid #eee;
+            padding-top: 1rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .entry {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid #ddd;
+        }
+        
+        .entry.user {
+            background: #e3f2fd;
+            border-left-color: #2196f3;
+        }
+        
+        .entry.assistant {
+            background: #f5f5f5;
+            border-left-color: #667eea;
+        }
+        
+        .entry.tool {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 13px;
+        }
+        
+        .thought {
+            color: #666;
+            font-style: italic;
+            margin-bottom: 0.5rem;
+        }
+        
+        .action {
+            font-weight: bold;
+            color: #d32f2f;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        
+        .final {
+            font-weight: bold;
+            color: #2e7d32;
+            font-size: 1.1em;
+            padding: 1rem;
+            background: #e8f5e9;
+            border-radius: 6px;
+        }
+        
+        .config-display {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            margin: 1rem 0;
+        }
+        
+        .link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .link:hover {
+            text-decoration: underline;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+        }
     </style>
 </head>
 <body>
-    <div id="app">
-        <h1>Agent Loop Demo</h1>
-        <div class="input-group">
-            <input type="text" id="goalInput" placeholder="Enter a goal (e.g., 'Find a JavaScript library for AI agents')" value="Find a JavaScript library for AI agents">
-            <button id="startButton">Start Agent</button>
+    <div class="container">
+        <h1>
+            <span>🤖</span>
+            GitHub File System Agent
+        </h1>
+        
+        <div id="status" class="status pending">
+            ⏳ Not configured. Please complete setup below.
         </div>
-        <div id="log"></div>
+
+        <!-- Setup Section -->
+        <div id="setup-section">
+            <h2>Setup Instructions</h2>
+            
+            <div class="setup-section">
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <strong>Create a GitHub Repository</strong>
+                    <p>This will be your agent's persistent file system. Go to GitHub and create a new repository (public or private).</p>
+                    <a href="https://github.com/new" target="_blank" rel="noopener" class="link">→ Create New GitHub Repository</a>
+                    <div class="warning">
+                        <strong>Recommended:</strong> Name it something like <code>agent-workspace</code> or <code>ai-agent-storage</code>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <strong>Create a Personal Access Token (PAT)</strong>
+                    <p>The agent needs a token with <code>repo</code> scope to read/write files.</p>
+                    <a href="https://github.com/settings/tokens/new?description=Agent%20File%20System&scopes=repo" target="_blank" rel="noopener" class="link">→ Create GitHub Token (Classic)</a>
+                    <p><small>Select the <strong>repo</strong> scope and click "Generate token". Copy the token immediately (you won't see it again).</small></p>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <strong>Configure GitHub File System</strong>
+                    
+                    <div class="form-field">
+                        <label>GitHub Username/Organization:</label>
+                        <input type="text" id="owner-input" placeholder="octocat" />
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Repository Name:</label>
+                        <input type="text" id="repo-input" placeholder="agent-workspace" />
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Branch Name:</label>
+                        <input type="text" id="branch-input" value="main" placeholder="main" />
+                        <small>Usually "main" or "master"</small>
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Personal Access Token:</label>
+                        <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxx" />
+                        <small>Your GitHub PAT with repo scope</small>
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Your Email (for commits):</label>
+                        <input type="text" id="email-input" placeholder="you@example.com" />
+                    </div>
+                    
+                    <button id="save-config-btn">💾 Save Configuration</button>
+                    <button id="test-config-btn" class="secondary">🔍 Test Connection</button>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <strong>Configure Gemini API</strong>
+                    <p>The agent uses Google Gemini for intelligence.</p>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="link">→ Get Gemini API Key</a>
+                    
+                    <div class="form-field">
+                        <label>Gemini API Key:</label>
+                        <input type="password" id="gemini-key-input" placeholder="AIzaSy..." />
+                    </div>
+                    
+                    <button id="save-gemini-btn">💾 Save Gemini Key</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Section -->
+        <div id="demo-section" style="display: none;">
+            <h2>Agent Demo</h2>
+            
+            <div class="config-display">
+                <strong>Current Configuration:</strong><br>
+                Repository: <span id="config-repo">-</span><br>
+                Branch: <span id="config-branch">-</span>
+            </div>
+            
+            <p>Give the agent a goal that requires persistent storage. Examples:</p>
+            <ul>
+                <li>"Create a todo list and save it as todos.txt"</li>
+                <li>"Research JavaScript best practices and save notes"</li>
+                <li>"Keep track of daily progress in a journal"</li>
+                <li>"Search for existing notes about X and summarize them"</li>
+            </ul>
+            
+            <div class="input-group">
+                <input type="text" id="goal-input" placeholder="Enter agent goal..." value="Create a file called notes/welcome.txt with a welcome message">
+                <button id="start-btn">🚀 Start Agent</button>
+            </div>
+            
+            <button id="view-repo-btn" class="secondary">📁 View Repository</button>
+            <button id="reset-config-btn" class="secondary">⚙️ Reconfigure</button>
+            
+            <div id="log"></div>
+        </div>
     </div>
 
     <script type="module">
-        import AgentLoop from './js/AgentLoop.js';
+        import GitHubFileSystem, { saveGitHubFSConfig, loadGitHubFSConfig, setupGitHubFS } from './GitHubFileSystem.js';
+        import AgentLoopGitHub from './AgentLoop-GitHub.js';
 
-        const startButton = document.getElementById('startButton');
-        const goalInput = document.getElementById('goalInput');
+        // DOM elements
+        const statusDiv = document.getElementById('status');
+        const setupSection = document.getElementById('setup-section');
+        const demoSection = document.getElementById('demo-section');
         const logDiv = document.getElementById('log');
+        
+        const ownerInput = document.getElementById('owner-input');
+        const repoInput = document.getElementById('repo-input');
+        const branchInput = document.getElementById('branch-input');
+        const tokenInput = document.getElementById('token-input');
+        const emailInput = document.getElementById('email-input');
+        const geminiKeyInput = document.getElementById('gemini-key-input');
+        
+        const saveConfigBtn = document.getElementById('save-config-btn');
+        const testConfigBtn = document.getElementById('test-config-btn');
+        const saveGeminiBtn = document.getElementById('save-gemini-btn');
+        const startBtn = document.getElementById('start-btn');
+        const viewRepoBtn = document.getElementById('view-repo-btn');
+        const resetConfigBtn = document.getElementById('reset-config-btn');
+        const goalInput = document.getElementById('goal-input');
 
-        function appendLog(role, content) {
-            const entry = document.createElement('div');
-            entry.className = `entry ${role}`;
-            
-            if (role === 'assistant') {
-                // Try to parse out thoughts and actions nicely
-                const thoughtMatch = content.match(/<thought>(.*?)<\/thought>/s);
-                const actionMatch = content.match(/<action>(.*?)<\/action>/s);
-                const finalMatch = content.match(/<final_answer>(.*?)<\/final_answer>/s);
-
-                let html = '';
-                if (thoughtMatch) html += `<div class="thought">💭 ${thoughtMatch[1]}</div>`;
-                if (actionMatch) html += `<div class="action">🛠️ Action: ${actionMatch[1]}</div>`;
-                if (finalMatch) html += `<div class="final">✅ Final Answer: ${finalMatch[1]}</div>`;
+        // Check if already configured
+        function checkConfiguration() {
+            try {
+                const config = loadGitHubFSConfig();
+                const geminiKey = localStorage.getItem('GEMINI_API_KEY');
                 
-                if (!html) html = content; // Fallback
-                entry.innerHTML = html;
-            } else {
-                entry.textContent = content;
+                if (config && geminiKey) {
+                    showDemoSection(config);
+                } else {
+                    loadSavedValues();
+                }
+            } catch (error) {
+                loadSavedValues();
             }
-            logDiv.appendChild(entry);
-            window.scrollTo(0, document.body.scrollHeight);
         }
 
-        startButton.addEventListener('click', async () => {
-            const goal = goalInput.value.trim();
-            if (!goal) return;
+        function loadSavedValues() {
+            ownerInput.value = localStorage.getItem('github-fs-owner') || '';
+            repoInput.value = localStorage.getItem('github-fs-repo') || '';
+            branchInput.value = localStorage.getItem('github-fs-branch') || 'main';
+            emailInput.value = localStorage.getItem('github-fs-email') || '';
+            
+            const geminiKey = localStorage.getItem('GEMINI_API_KEY');
+            if (geminiKey) {
+                geminiKeyInput.value = geminiKey;
+            }
+        }
 
-            startButton.disabled = true;
-            logDiv.innerHTML = ''; // Clear log
+        function showDemoSection(config) {
+            statusDiv.className = 'status success';
+            statusDiv.textContent = '✓ Configured and ready!';
+            setupSection.style.display = 'none';
+            demoSection.style.display = 'block';
+            
+            document.getElementById('config-repo').textContent = `${config.owner}/${config.repo}`;
+            document.getElementById('config-branch').textContent = config.branch;
+        }
+
+        // Save configuration
+        saveConfigBtn.addEventListener('click', async () => {
+            const owner = ownerInput.value.trim();
+            const repo = repoInput.value.trim();
+            const branch = branchInput.value.trim() || 'main';
+            const auth = tokenInput.value.trim();
+            const email = emailInput.value.trim();
+
+            if (!owner || !repo || !auth) {
+                alert('Please fill in owner, repository, and token fields');
+                return;
+            }
+
+            const config = { owner, repo, branch, auth, email };
             
             try {
-                const agent = new AgentLoop(goal);
+                saveConfigBtn.disabled = true;
+                saveConfigBtn.textContent = '⏳ Testing connection...';
                 
-                // Hook into history updates to log them in real-time
-                // We'll use a simple polling or proxy approach since AgentLoop doesn't emit events yet
-                // Or we can modify AgentLoop to accept a callback. 
-                // For now, let's just modify the run loop in the file to log? 
-                // Or better, since we can't easily hook without modifying AgentLoop, 
-                // I will add a simple callback support to AgentLoop in the edit step.
+                const fs = new GitHubFileSystem(config);
+                await fs.initialize();
+                
+                saveGitHubFSConfig(config);
+                localStorage.setItem('github-fs-owner', owner);
+                localStorage.setItem('github-fs-repo', repo);
+                localStorage.setItem('github-fs-branch', branch);
+                localStorage.setItem('github-fs-email', email);
+                
+                alert('✓ Configuration saved successfully!');
+                checkConfiguration();
+            } catch (error) {
+                alert(`Configuration failed: ${error.message}`);
+            } finally {
+                saveConfigBtn.disabled = false;
+                saveConfigBtn.textContent = '💾 Save Configuration';
+            }
+        });
+
+        // Test connection
+        testConfigBtn.addEventListener('click', async () => {
+            const owner = ownerInput.value.trim();
+            const repo = repoInput.value.trim();
+            const branch = branchInput.value.trim() || 'main';
+            const auth = tokenInput.value.trim();
+            const email = emailInput.value.trim();
+
+            if (!owner || !repo || !auth) {
+                alert('Please fill in owner, repository, and token fields');
+                return;
+            }
+
+            const config = { owner, repo, branch, auth, email };
+            
+            try {
+                testConfigBtn.disabled = true;
+                testConfigBtn.textContent = '⏳ Testing...';
+                
+                const fs = new GitHubFileSystem(config);
+                await fs.initialize();
+                const info = await fs.getRepoInfo();
+                
+                alert(`✓ Connection successful!\n\nRepository: ${info.fullName}\nDefault Branch: ${info.defaultBranch}\nPrivate: ${info.private ? 'Yes' : 'No'}`);
+            } catch (error) {
+                alert(`Connection failed: ${error.message}`);
+            } finally {
+                testConfigBtn.disabled = false;
+                testConfigBtn.textContent = '🔍 Test Connection';
+            }
+        });
+
+        // Save Gemini key
+        saveGeminiBtn.addEventListener('click', () => {
+            const key = geminiKeyInput.value.trim();
+            if (!key) {
+                alert('Please enter your Gemini API key');
+                return;
+            }
+            
+            localStorage.setItem('GEMINI_API_KEY', key);
+            alert('✓ Gemini API key saved!');
+            checkConfiguration();
+        });
+
+        // View repository
+        viewRepoBtn.addEventListener('click', () => {
+            try {
+                const config = loadGitHubFSConfig();
+                window.open(`https://github.com/${config.owner}/${config.repo}`, '_blank');
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        // Reset configuration
+        resetConfigBtn.addEventListener('click', () => {
+            if (confirm('Reset configuration? You will need to set up again.')) {
+                demoSection.style.display = 'none';
+                setupSection.style.display = 'block';
+                statusDiv.className = 'status pending';
+                statusDiv.textContent = '⏳ Not configured. Please complete setup below.';
+            }
+        });
+
+        // Start agent
+        startBtn.addEventListener('click', async () => {
+            const goal = goalInput.value.trim();
+            if (!goal) {
+                alert('Please enter a goal for the agent');
+                return;
+            }
+
+            startBtn.disabled = true;
+            logDiv.innerHTML = '';
+            
+            try {
+                const agent = new AgentLoopGitHub(goal);
                 
                 agent.onStep = (step) => {
                     appendLog(step.role, step.content);
@@ -91,13 +561,40 @@
                 
             } catch (error) {
                 const errDiv = document.createElement('div');
-                errDiv.className = 'error';
+                errDiv.className = 'status error';
                 errDiv.textContent = `Error: ${error.message}`;
                 logDiv.appendChild(errDiv);
             } finally {
-                startButton.disabled = false;
+                startBtn.disabled = false;
             }
         });
+
+        function appendLog(role, content) {
+            const entry = document.createElement('div');
+            entry.className = `entry ${role}`;
+            
+            if (role === 'assistant') {
+                const thoughtMatch = content.match(/<thought>(.*?)<\/thought>/s);
+                const actionMatch = content.match(/<action>(.*?)<\/action>/s);
+                const finalMatch = content.match(/<final_answer>(.*?)<\/final_answer>/s);
+
+                let html = '';
+                if (thoughtMatch) html += `<div class="thought">💭 ${thoughtMatch[1]}</div>`;
+                if (actionMatch) html += `<div class="action">🛠️ ${actionMatch[1]}</div>`;
+                if (finalMatch) html += `<div class="final">✅ ${finalMatch[1]}</div>`;
+                
+                if (!html) html = content;
+                entry.innerHTML = html;
+            } else {
+                entry.textContent = content;
+            }
+            
+            logDiv.appendChild(entry);
+            entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Initialize
+        checkConfiguration();
     </script>
 </body>
 </html>

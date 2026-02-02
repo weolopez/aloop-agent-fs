@@ -1,10 +1,11 @@
 // AgentLoop-GitHub.js
 // Enhanced AgentLoop that uses GitHub as persistent file system.
 // This version integrates githubFSTools to enable the agent to save/retrieve data from a GitHub repo.
-// All other functionality remains the same as the original AgentLoop.
+// Now includes Navigator persona for a personality-driven assistant experience.
 
 import { fetchGemini } from './llm-tools.js';
 import { githubFSTools, getGitHubFSToolsDescription } from './github-fs-tools.js';
+import { getSystemPersona, logWithPersona, PERSONA } from './persona.js';
 
 /**
  * @typedef {Object} AgentState
@@ -26,13 +27,26 @@ class AgentLoopGitHub {
   /**
    * @param {string} user_goal - The initial user goal.
    * @param {Tool[]} [additionalTools=[]] - Additional tools beyond GitHub FS tools.
-   * @param {number} [maxIterations=25] - Max loop iterations to prevent runaway.
+   * @param {Object} [options={}] - Configuration options.
+   * @param {number} [options.maxIterations=25] - Max loop iterations to prevent runaway.
+   * @param {boolean} [options.verbose=true] - Enable verbose logging.
+   * @param {Object} [options.userProfile=null] - User profile for personalization.
+   * @param {boolean} [options.skipConfirmation=false] - Skip goal confirmation step.
    */
-  constructor(user_goal, additionalTools = [], maxIterations = 25) {
+  constructor(user_goal, additionalTools = [], options = {}) {
     this.user_goal = user_goal;
     this.history = [{ role: 'user', content: user_goal }];
     this.stepsTaken = 0;
-    this.maxIterations = maxIterations;
+    
+    // Merge options with defaults
+    this.options = {
+      maxIterations: 25,
+      verbose: true,
+      userProfile: null,
+      skipConfirmation: false,
+      ...options
+    };
+    this.maxIterations = this.options.maxIterations;
     
     // Combine GitHub FS tools with any additional tools
     const allTools = [...githubFSTools, ...additionalTools];
@@ -41,7 +55,12 @@ class AgentLoopGitHub {
     this.status = 'running';
     this.db = null;
     this.onStep = null; // Callback for steps
+    this.onGoalAnalysis = null; // Callback for goal analysis (Phase 2)
     this.initDB();
+    
+    if (this.options.verbose) {
+      logWithPersona(`Initialized with goal: "${user_goal}"`, 'info');
+    }
   }
 
   // Initialize IndexedDB for persisting AgentState.
@@ -75,31 +94,35 @@ class AgentLoopGitHub {
     });
   }
 
-  // Build the prompt for the LLM, including history and instructions.
+  // Build the prompt for the LLM, including persona, history and instructions.
   buildPrompt() {
     const toolDescriptions = Array.from(this.tools.values())
       .map(t => `${t.name}: ${t.description}`)
       .join('\n');
 
     const fsDescription = getGitHubFSToolsDescription();
+    
+    // Get persona with optional user profile
+    const persona = getSystemPersona(this.options.userProfile);
 
-    let prompt = `You are an autonomous AI agent with access to a persistent GitHub file system.
+    let prompt = `${persona}
 
-YOUR GOAL: ${this.user_goal}
+---
+
+YOUR CURRENT GOAL: ${this.user_goal}
 
 ${fsDescription}
 
 AVAILABLE TOOLS:
 ${toolDescriptions}
 
-INSTRUCTIONS:
-1. Think step-by-step about how to achieve the goal
-2. Use the file system to store important information, results, and notes
-3. Before writing files, consider what already exists (use search/list tools)
-4. Output your reasoning in <thought> tags
-5. When you know what action to take, output exactly ONE tool call in <action> tags with JSON: {"tool": "tool_name", "params": {...}}
-6. When the goal is fully achieved, output your final answer in <final_answer> tags
-7. Do not output anything outside of these tags
+REASONING FRAMEWORK:
+1. Understand the goal deeply before acting
+2. Check what already exists (search/list) before creating new things
+3. Think out loud in <thought> tags - show your reasoning
+4. Take exactly ONE action per turn in <action> tags with JSON: {"tool": "tool_name", "params": {...}}
+5. When the goal is fully achieved, provide your answer in <final_answer> tags
+6. Do not output anything outside of these tags
 
 CONVERSATION HISTORY:
 `;
@@ -160,10 +183,15 @@ CONVERSATION HISTORY:
     if (this.stepsTaken >= this.maxIterations) {
       this.status = 'max_iterations_reached';
       this.saveState();
+      logWithPersona(`Max iterations (${this.maxIterations}) reached`, 'warning');
       return 'Error: Max iterations reached. Goal not achieved.';
     }
 
     this.stepsTaken++;
+    
+    if (this.options.verbose) {
+      logWithPersona(`Step ${this.stepsTaken}/${this.maxIterations}`, 'info');
+    }
 
     const prompt = this.buildPrompt();
     let response;
@@ -172,6 +200,7 @@ CONVERSATION HISTORY:
     } catch (error) {
       this.status = 'error';
       this.saveState();
+      logWithPersona(`LLM call failed: ${error.message}`, 'error');
       return `Error calling LLM: ${error.message}`;
     }
 
@@ -182,6 +211,7 @@ CONVERSATION HISTORY:
       const errMsg = { role: 'system', content: `Parse error: ${error.message}` };
       this.history.push(errMsg);
       if (this.onStep) this.onStep(errMsg);
+      logWithPersona(`Parse error, retrying: ${error.message}`, 'warning');
       this.saveState();
       return await this.run(); // Recurse to let LLM self-correct
     }
@@ -191,6 +221,9 @@ CONVERSATION HISTORY:
       const msg = { role: 'assistant', content: `<thought>${parsed.thought}</thought>` };
       this.history.push(msg);
       if (this.onStep) this.onStep(msg);
+      if (this.options.verbose) {
+        logWithPersona(parsed.thought.substring(0, 100) + (parsed.thought.length > 100 ? '...' : ''), 'thought');
+      }
     }
 
     if (parsed.isFinal) {
@@ -200,6 +233,7 @@ CONVERSATION HISTORY:
       
       this.status = 'completed';
       this.saveState();
+      logWithPersona('Goal completed', 'success');
       return parsed.finalAnswer;
     } else {
       let toolOutput;
@@ -207,6 +241,10 @@ CONVERSATION HISTORY:
       const actionMsg = { role: 'assistant', content: `<action>${JSON.stringify(parsed.action)}</action>` };
       this.history.push(actionMsg);
       if (this.onStep) this.onStep(actionMsg);
+      
+      if (this.options.verbose) {
+        logWithPersona(`Executing: ${parsed.action.tool}`, 'action');
+      }
 
       try {
         const tool = this.tools.get(parsed.action.tool);
@@ -216,6 +254,7 @@ CONVERSATION HISTORY:
         toolOutput = await tool.execute(parsed.action.params);
       } catch (error) {
         toolOutput = `Tool error: ${error.message}`;
+        logWithPersona(`Tool error: ${error.message}`, 'error');
       }
 
       const toolMsg = { role: 'tool', content: toolOutput };
