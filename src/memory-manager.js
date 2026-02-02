@@ -6,8 +6,8 @@ import { logWithPersona, PERSONA } from './persona.js';
 
 /**
  * @typedef {Object} MemoryConfig
- * @property {string} memoryPath - Base path for memory files (default: 'memory')
- * @property {string} dailyPath - Path for daily logs (default: 'memory/daily')
+ * @property {string} memoryPath - Base path for memory files (default: '')
+ * @property {string} dailyPath - Path for daily logs (default: 'memory')
  * @property {boolean} loadYesterday - Whether to load yesterday's log at startup
  * @property {number} maxDailyEntries - Max entries before suggesting archival
  */
@@ -20,6 +20,7 @@ export const MEMORY_FILES = {
   USER: 'USER.md',      // Who the user is, preferences
   IDENTITY: 'IDENTITY.md', // Agent's name and customization
   MEMORY: 'MEMORY.md',  // Curated long-term memory
+  AGENTS: 'AGENTS.md',  // Workspace guidelines and standards
 };
 
 /**
@@ -34,8 +35,8 @@ export class MemoryManager {
   constructor(fs, options = {}) {
     this.fs = fs;
     this.options = {
-      memoryPath: 'memory',
-      dailyPath: 'memory/daily',
+      memoryPath: '',
+      dailyPath: 'memory',
       loadYesterday: true,
       maxDailyEntries: 50,
       ...options
@@ -47,6 +48,7 @@ export class MemoryManager {
       user: null,
       identity: null,
       memory: null,
+      agents: null,
       today: null,
       yesterday: null
     };
@@ -77,6 +79,7 @@ export class MemoryManager {
       this._loadMemoryFile(MEMORY_FILES.USER, 'user'),
       this._loadMemoryFile(MEMORY_FILES.IDENTITY, 'identity'),
       this._loadMemoryFile(MEMORY_FILES.MEMORY, 'memory'),
+      this._loadMemoryFile(MEMORY_FILES.AGENTS, 'agents'),
       this._loadDailyLog('today'),
     ];
 
@@ -97,7 +100,9 @@ export class MemoryManager {
    * @private
    */
   async _loadMemoryFile(filename, cacheKey) {
-    const path = `${this.options.memoryPath}/${filename}`;
+    const path = this.options.memoryPath 
+      ? `${this.options.memoryPath}/${filename}`
+      : filename;
     try {
       const file = await this.fs.readFile(path);
       this.cache[cacheKey] = file.content;
@@ -252,6 +257,7 @@ ${PERSONA.boundaries.map(b => `- ${b}`).join('\n')}
       includeUser = true,
       includeIdentity = true,
       includeMemory = true,
+      includeAgents = true,
       includeDailyLogs = true
     } = options;
 
@@ -266,6 +272,10 @@ ${PERSONA.boundaries.map(b => `- ${b}`).join('\n')}
 
     if (includeIdentity && this.cache.identity) {
       sections.push(`## Agent Identity\n\n${this.cache.identity}`);
+    }
+
+    if (includeAgents && this.cache.agents) {
+      sections.push(`## Workspace Guidelines\n\n${this.cache.agents}`);
     }
 
     if (includeUser && this.cache.user) {
@@ -375,7 +385,10 @@ ${PERSONA.boundaries.map(b => `- ${b}`).join('\n')}
    * @returns {Promise<void>}
    */
   async writeMemory(entry, category = 'General') {
-    const path = `${this.options.memoryPath}/${MEMORY_FILES.MEMORY}`;
+    const filename = MEMORY_FILES.MEMORY;
+    const path = this.options.memoryPath 
+      ? `${this.options.memoryPath}/${filename}`
+      : filename;
     const timestamp = new Date().toISOString().split('T')[0];
     
     const formattedEntry = `### ${category} (${timestamp})\n\n${entry}\n`;
@@ -405,7 +418,10 @@ ${PERSONA.boundaries.map(b => `- ${b}`).join('\n')}
    * @returns {Promise<void>}
    */
   async writeUser(content) {
-    const path = `${this.options.memoryPath}/${MEMORY_FILES.USER}`;
+    const filename = MEMORY_FILES.USER;
+    const path = this.options.memoryPath 
+      ? `${this.options.memoryPath}/${filename}`
+      : filename;
     
     try {
       await this.fs.writeFile(path, content, 'Update user profile');
@@ -423,7 +439,10 @@ ${PERSONA.boundaries.map(b => `- ${b}`).join('\n')}
    * @returns {Promise<void>}
    */
   async writeSoul(content) {
-    const path = `${this.options.memoryPath}/${MEMORY_FILES.SOUL}`;
+    const filename = MEMORY_FILES.SOUL;
+    const path = this.options.memoryPath 
+      ? `${this.options.memoryPath}/${filename}`
+      : filename;
     
     try {
       await this.fs.writeFile(path, content, 'Update agent soul');
@@ -441,7 +460,10 @@ ${PERSONA.boundaries.map(b => `- ${b}`).join('\n')}
    * @returns {Promise<void>}
    */
   async writeIdentity(content) {
-    const path = `${this.options.memoryPath}/${MEMORY_FILES.IDENTITY}`;
+    const filename = MEMORY_FILES.IDENTITY;
+    const path = this.options.memoryPath 
+      ? `${this.options.memoryPath}/${filename}`
+      : filename;
     
     try {
       await this.fs.writeFile(path, content, 'Update agent identity');

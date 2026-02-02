@@ -183,6 +183,7 @@ export function createMemoryTools(memoryManager) {
 - USER.md - User profile and preferences
 - MEMORY.md - Long-term memories
 - IDENTITY.md - Your identity configuration
+- AGENTS.md - Workspace standards and guidelines
 - today - Today's daily log
 - yesterday - Yesterday's daily log`,
       schema: {
@@ -191,7 +192,7 @@ export function createMemoryTools(memoryManager) {
           file: {
             type: 'string',
             description: 'Which memory file to read',
-            enum: ['SOUL.md', 'USER.md', 'MEMORY.md', 'IDENTITY.md', 'today', 'yesterday']
+            enum: ['SOUL.md', 'USER.md', 'MEMORY.md', 'IDENTITY.md', 'AGENTS.md', 'today', 'yesterday']
           }
         },
         required: ['file']
@@ -211,6 +212,9 @@ export function createMemoryTools(memoryManager) {
             break;
           case 'IDENTITY.md':
             content = memoryManager.getIdentity();
+            break;
+          case 'AGENTS.md':
+            content = memoryManager.cache.agents;
             break;
           case 'today':
             content = memoryManager.getToday();
