@@ -2,7 +2,7 @@
 
 ## About
 
-<!-- Navigator will learn about you over time -->
+<!-- Vargo will learn about you over time -->
 
 ## Preferences
 
@@ -12,8 +12,4 @@
 
 ## Notes
 
-<!-- Things Navigator has learned about you -->
-
-## undefined
-
-undefined
+<!-- Things Vargo has learned about you -->

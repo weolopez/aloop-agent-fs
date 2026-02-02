@@ -98,6 +98,11 @@ export function createMemoryTools(memoryManager) {
       },
       execute: async ({ section, content }) => {
         try {
+          // Validate inputs
+          if (!section || !content) {
+            return `Error: Both section and content are required. Got section="${section}", content="${content}"`;
+          }
+          
           // Get current user profile
           let userProfile = memoryManager.getUser() || `# User Profile\n\n## About\n\n## Preferences\n\n## Notes\n`;
           
