@@ -734,25 +734,24 @@
         }
         
         // Send message
-        async function sendMessage() {
-            const message = chatInput.value.trim();
-            if (!message || !shell) return;
-            
-            chatInput.value = '';
-            
-            if (message.startsWith('/')) {
-                await shell.command(message);
-            } else {
-                addChatMessage('user', message);
-                await shell.send(message);
-            }
-            
-            // Update session info
-            const session = shell.getSession();
-            if (session) {
-                sessionInfoEl.textContent = `Session: ${session.id} (${session.messageCount} messages)`;
-            }
-        }
+         async function sendMessage() {
+             const message = chatInput.value.trim();
+             if (!message || !shell) return;
+             
+             chatInput.value = '';
+             
+             if (message.startsWith('/')) {
+                 await shell.command(message);
+             } else {
+                 await shell.send(message);
+             }
+             
+             // Update session info
+             const session = shell.getSession();
+             if (session) {
+                 sessionInfoEl.textContent = `Session: ${session.id} (${session.messageCount} messages)`;
+             }
+         }
         
         // Global function for quick action buttons
         window.sendCommand = async (cmd) => {
