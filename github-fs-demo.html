@@ -276,7 +276,7 @@
                     <span class="step-number">1</span>
                     <strong>Create a GitHub Repository</strong>
                     <p>This will be your agent's persistent file system. Go to GitHub and create a new repository (public or private).</p>
-                    <a href="https://github.com/new" target="_blank" class="link">→ Create New GitHub Repository</a>
+                    <a href="https://github.com/new" target="_blank" rel="noopener" class="link">→ Create New GitHub Repository</a>
                     <div class="warning">
                         <strong>Recommended:</strong> Name it something like <code>agent-workspace</code> or <code>ai-agent-storage</code>
                     </div>
@@ -286,7 +286,7 @@
                     <span class="step-number">2</span>
                     <strong>Create a Personal Access Token (PAT)</strong>
                     <p>The agent needs a token with <code>repo</code> scope to read/write files.</p>
-                    <a href="https://github.com/settings/tokens/new?description=Agent%20File%20System&scopes=repo" target="_blank" class="link">→ Create GitHub Token (Classic)</a>
+                    <a href="https://github.com/settings/tokens/new?description=Agent%20File%20System&scopes=repo" target="_blank" rel="noopener" class="link">→ Create GitHub Token (Classic)</a>
                     <p><small>Select the <strong>repo</strong> scope and click "Generate token". Copy the token immediately (you won't see it again).</small></p>
                 </div>
                 
@@ -306,7 +306,7 @@
                     
                     <div class="form-field">
                         <label>Branch Name:</label>
-                        <input type="text" id="branch-input" value="main" />
+                        <input type="text" id="branch-input" value="main" placeholder="main" />
                         <small>Usually "main" or "master"</small>
                     </div>
                     
@@ -329,7 +329,7 @@
                     <span class="step-number">4</span>
                     <strong>Configure Gemini API</strong>
                     <p>The agent uses Google Gemini for intelligence.</p>
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link">→ Get Gemini API Key</a>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="link">→ Get Gemini API Key</a>
                     
                     <div class="form-field">
                         <label>Gemini API Key:</label>
