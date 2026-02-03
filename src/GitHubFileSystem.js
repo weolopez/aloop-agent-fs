@@ -52,28 +52,48 @@ export class GitHubFileSystem {
     };
     this.octokit = new Octokit({ auth: this.config.auth });
     this._cache = new Map();
+    this.workingBranch = null; // Will be set during initialize()
   }
 
   // ===========================================================================
   // INITIALIZATION
   // ===========================================================================
 
-  async initialize() {
+  async _setupWorkingBranch() {
+    const timestamp = Date.now();
+    const workingBranchName = `agent-workspace-${timestamp}`;
+    
     try {
-      const { data } = await this.octokit.rest.repos.get({
-        owner: this.config.owner,
-        repo: this.config.repo
-      });
-      console.log(`Connected to GitHub repo: ${data.full_name}`);
-      return true;
+      await this.createBranch(workingBranchName, this.config.branch);
+      this.workingBranch = workingBranchName;
     } catch (error) {
-      if (error.status === 404) {
-        throw new Error(`Repository ${this.config.owner}/${this.config.repo} not found.`);
+      // If branch creation fails, try a simpler name
+      const simpleName = 'agent-workspace';
+      try {
+        await this.createBranch(simpleName, this.config.branch);
+        this.workingBranch = simpleName;
+      } catch (secondError) {
+        throw new Error(`Cannot create working branch: ${secondError.message}`);
       }
-      if (error.status === 401) {
-        throw new Error('Authentication failed. Check your GitHub token.');
+    }
+  }
+
+  async _setupWorkingBranch() {
+    const timestamp = Date.now();
+    const workingBranchName = `agent-workspace-${timestamp}`;
+    
+    try {
+      await this.createBranch(workingBranchName, this.config.branch);
+      this.workingBranch = workingBranchName;
+    } catch (error) {
+      // If branch creation fails, try a simpler name
+      const simpleName = 'agent-workspace';
+      try {
+        await this.createBranch(simpleName, this.config.branch);
+        this.workingBranch = simpleName;
+      } catch (secondError) {
+        throw new Error(`Cannot create working branch: ${secondError.message}`);
       }
-      throw new Error(`Failed to connect to GitHub: ${error.message}`);
     }
   }
 
@@ -98,7 +118,7 @@ export class GitHubFileSystem {
 
   async readFile(path) {
     const platform = await ensurePlatform();
-    const cacheKey = `${this.config.branch}:${path}`;
+    const cacheKey = `${this.workingBranch}:${path}`;
     if (this._cache.has(cacheKey)) {
       return this._cache.get(cacheKey);
     }
@@ -108,7 +128,7 @@ export class GitHubFileSystem {
         owner: this.config.owner,
         repo: this.config.repo,
         path,
-        ref: this.config.branch
+        ref: this.workingBranch
       });
 
       if (Array.isArray(data)) {
@@ -135,7 +155,7 @@ export class GitHubFileSystem {
   async writeFile(path, content, message) {
     const platform = await ensurePlatform();
     message = message || `Update ${path}`;
-    this._cache.delete(`${this.config.branch}:${path}`);
+    this._cache.delete(`${this.workingBranch}:${path}`);
 
     let sha = null;
     try {
@@ -149,7 +169,7 @@ export class GitHubFileSystem {
       path,
       message,
       content: platform.encoding.base64Encode(content),
-      branch: this.config.branch,
+      branch: this.workingBranch,
       sha,
       committer: { name: this.config.owner, email: this.config.email }
     });
@@ -166,7 +186,7 @@ export class GitHubFileSystem {
 
   async deleteFile(path, message) {
     message = message || `Delete ${path}`;
-    this._cache.delete(`${this.config.branch}:${path}`);
+    this._cache.delete(`${this.workingBranch}:${path}`);
 
     const file = await this.readFile(path);
     await this.octokit.rest.repos.deleteFile({
@@ -175,7 +195,7 @@ export class GitHubFileSystem {
       path,
       message,
       sha: file.sha,
-      branch: this.config.branch,
+      branch: this.workingBranch,
       committer: { name: this.config.owner, email: this.config.email }
     });
 
@@ -188,7 +208,7 @@ export class GitHubFileSystem {
         owner: this.config.owner,
         repo: this.config.repo,
         path,
-        ref: this.config.branch
+        ref: this.workingBranch
       });
       return true;
     } catch (error) {
@@ -207,7 +227,7 @@ export class GitHubFileSystem {
         owner: this.config.owner,
         repo: this.config.repo,
         path,
-        ref: this.config.branch
+        ref: this.workingBranch
       });
 
       if (!Array.isArray(data)) {
@@ -237,7 +257,7 @@ export class GitHubFileSystem {
     const { data: refData } = await this.octokit.rest.git.getRef({
       owner: this.config.owner,
       repo: this.config.repo,
-      ref: `heads/${this.config.branch}`
+      ref: `heads/${this.workingBranch}`
     });
 
     const { data: treeData } = await this.octokit.rest.git.getTree({
@@ -334,7 +354,7 @@ export class GitHubFileSystem {
   }
 
   async deleteBranch(name) {
-    if (name === this.config.branch) {
+    if (name === this.workingBranch) {
       throw new Error(`Cannot delete current branch '${name}'.`);
     }
 
@@ -355,15 +375,15 @@ export class GitHubFileSystem {
   }
 
   setBranch(name) {
-    if (this.config.branch !== name) {
-      this.config.branch = name;
+    if (this.workingBranch !== name) {
+      this.workingBranch = name;
       this.clearCache();
       console.log(`Switched to branch '${name}'`);
     }
   }
 
   getCurrentBranch() {
-    return this.config.branch;
+    return this.workingBranch;
   }
 
   // ===========================================================================
