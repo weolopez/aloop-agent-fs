@@ -1,13 +1,33 @@
 {
   "id": "main",
   "createdAt": "2026-02-03T11:04:30.847Z",
-  "lastActive": "2026-02-03T11:06:05.960Z",
-  "messageCount": 1,
+  "lastActive": "2026-02-03T11:12:06.323Z",
+  "messageCount": 5,
   "messages": [
     {
       "role": "user",
       "content": "Describe your UI, the responses have different colors what do they mean.",
       "timestamp": "2026-02-03T11:05:53.332Z"
+    },
+    {
+      "role": "user",
+      "content": "do you recall my last message?",
+      "timestamp": "2026-02-03T11:11:56.417Z"
+    },
+    {
+      "role": "assistant",
+      "content": "<action>{\"tool\":\"fs_list_directory\",\"params\":{\"path\":\"LOGS\"}}</action>",
+      "timestamp": "2026-02-03T11:12:03.649Z"
+    },
+    {
+      "role": "tool",
+      "content": "Error listing directory: Directory not found: LOGS",
+      "timestamp": "2026-02-03T11:12:04.053Z"
+    },
+    {
+      "role": "assistant",
+      "content": "<action>{\"tool\":\"fs_list_directory\",\"params\":{\"path\":\".\"}}</action>",
+      "timestamp": "2026-02-03T11:12:06.323Z"
     }
   ],
   "summaries": [],
