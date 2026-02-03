@@ -132,36 +132,52 @@ export class GitHubFileSystem {
     }
   }
 
-  async writeFile(path, content, message) {
+  async writeFile(path, content, message, options = {}) {
     const platform = await ensurePlatform();
     message = message || `Update ${path}`;
-    this._cache.delete(`${this.config.branch}:${path}`);
+    const maxRetries = options.maxRetries ?? 3;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // Always clear cache before getting fresh SHA
+      this._cache.delete(`${this.config.branch}:${path}`);
 
-    let sha = null;
-    try {
-      const existing = await this.readFile(path);
-      sha = existing.sha;
-    } catch (e) { /* File doesn't exist */ }
+      let sha = null;
+      try {
+        const existing = await this.readFile(path);
+        sha = existing.sha;
+      } catch (e) { /* File doesn't exist */ }
 
-    const { data } = await this.octokit.rest.repos.createOrUpdateFileContents({
-      owner: this.config.owner,
-      repo: this.config.repo,
-      path,
-      message,
-      content: platform.encoding.base64Encode(content),
-      branch: this.config.branch,
-      sha,
-      committer: { name: this.config.owner, email: this.config.email }
-    });
+      try {
+        const { data } = await this.octokit.rest.repos.createOrUpdateFileContents({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          path,
+          message,
+          content: platform.encoding.base64Encode(content),
+          branch: this.config.branch,
+          sha,
+          committer: { name: this.config.owner, email: this.config.email }
+        });
 
-    return {
-      path: data.content.path,
-      name: data.content.name,
-      content,
-      sha: data.content.sha,
-      type: 'file',
-      size: data.content.size
-    };
+        return {
+          path: data.content.path,
+          name: data.content.name,
+          content,
+          sha: data.content.sha,
+          type: 'file',
+          size: data.content.size
+        };
+      } catch (error) {
+        // 409 Conflict means SHA mismatch - retry with fresh SHA
+        if (error.status === 409 && attempt < maxRetries) {
+          console.warn(`[GitHubFS] SHA conflict on '${path}', retrying (${attempt + 1}/${maxRetries})...`);
+          // Small delay before retry to avoid hammering the API
+          await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+          continue;
+        }
+        throw error;
+      }
+    }
   }
 
   async deleteFile(path, message) {
