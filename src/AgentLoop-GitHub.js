@@ -3,11 +3,24 @@
 // This version integrates githubFSTools to enable the agent to save/retrieve data from a GitHub repo.
 // Now includes Navigator persona for a personality-driven assistant experience.
 // Memory system allows persistent context across sessions via Markdown files.
+//
+// Platform-agnostic: works in both browser and Node.js
 
 import { fetchGemini } from './llm-tools.js';
 import { githubFSTools, getGitHubFSToolsDescription } from './github-fs-tools.js';
 import { getSystemPersona, logWithPersona, PERSONA } from './persona.js';
 import { createMemoryTools } from './memory-tools.js';
+import { getPlatform, isBrowser } from './platform/index.js';
+
+// Platform adapter instance (initialized lazily)
+let _platform = null;
+
+async function ensurePlatform() {
+  if (!_platform) {
+    _platform = await getPlatform();
+  }
+  return _platform;
+}
 
 /**
  * @typedef {Object} AgentState
@@ -65,45 +78,40 @@ class AgentLoopGitHub {
     this.tools = new Map(allTools.map(tool => [tool.name, tool]));
     
     this.status = 'running';
-    this.db = null;
+    this.storage = null; // Platform storage (replaces IndexedDB)
     this.onStep = null; // Callback for steps
     this.onGoalAnalysis = null; // Callback for goal analysis (Phase 2)
-    this.initDB();
+    this._initStorage();
     
     if (this.options.verbose) {
       logWithPersona(`Initialized with goal: "${user_goal}"`, 'info');
     }
   }
 
-  // Initialize IndexedDB for persisting AgentState.
-  initDB() {
-    const request = window.indexedDB.open('AgentDB', 1);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('states')) {
-        db.createObjectStore('states', { keyPath: 'goal' });
-      }
-    };
-    request.onsuccess = (event) => {
-      this.db = event.target.result;
-      this.saveState();
-    };
-    request.onerror = (event) => {
-      console.error('IndexedDB error:', event.target.error);
-    };
+  // Initialize platform storage for persisting AgentState.
+  async _initStorage() {
+    try {
+      const platform = await ensurePlatform();
+      this.storage = platform.storage;
+      await this.saveState();
+    } catch (error) {
+      console.error('Storage initialization error:', error);
+    }
   }
 
-  // Save current state to IndexedDB.
-  saveState() {
-    if (!this.db) return;
-    const transaction = this.db.transaction(['states'], 'readwrite');
-    const store = transaction.objectStore('states');
-    store.put({
-      goal: this.user_goal,
-      history: this.history,
-      stepsTaken: this.stepsTaken,
-      status: this.status
-    });
+  // Save current state to platform storage.
+  async saveState() {
+    if (!this.storage) return;
+    try {
+      await this.storage.set(`agent-state:${this.user_goal}`, {
+        goal: this.user_goal,
+        history: this.history,
+        stepsTaken: this.stepsTaken,
+        status: this.status
+      });
+    } catch (error) {
+      // Storage might not be ready yet, ignore
+    }
   }
 
   // Build the prompt for the LLM, including persona, memory, history and instructions.
@@ -210,7 +218,7 @@ CONVERSATION HISTORY:
   async run() {
     if (this.stepsTaken >= this.maxIterations) {
       this.status = 'max_iterations_reached';
-      this.saveState();
+      await this.saveState();
       logWithPersona(`Max iterations (${this.maxIterations}) reached`, 'warning');
       return 'Error: Max iterations reached. Goal not achieved.';
     }
@@ -227,7 +235,7 @@ CONVERSATION HISTORY:
       response = await this.callLLM(prompt);
     } catch (error) {
       this.status = 'error';
-      this.saveState();
+      await this.saveState();
       logWithPersona(`LLM call failed: ${error.message}`, 'error');
       return `Error calling LLM: ${error.message}`;
     }
@@ -240,7 +248,7 @@ CONVERSATION HISTORY:
       this.history.push(errMsg);
       if (this.onStep) this.onStep(errMsg);
       logWithPersona(`Parse error, retrying: ${error.message}`, 'warning');
-      this.saveState();
+      await this.saveState();
       return await this.run(); // Recurse to let LLM self-correct
     }
 
@@ -260,7 +268,7 @@ CONVERSATION HISTORY:
       if (this.onStep) this.onStep(finalMsg);
       
       this.status = 'completed';
-      this.saveState();
+      await this.saveState();
       logWithPersona('Goal completed', 'success');
       return parsed.finalAnswer;
     } else {
@@ -289,7 +297,7 @@ CONVERSATION HISTORY:
       this.history.push(toolMsg);
       if (this.onStep) this.onStep(toolMsg);
 
-      this.saveState();
+      await this.saveState();
       return await this.run();
     }
   }

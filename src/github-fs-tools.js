@@ -1,20 +1,38 @@
 // github-fs-tools.js
 // Tools for AgentLoop that use GitHub as a persistent file system.
 // These tools enable the agent to read, write, search, and manage files in a GitHub repository.
+//
+// Platform-agnostic: works in both browser and Node.js
 
-import GitHubFileSystem, { loadGitHubFSConfig } from './GitHubFileSystem.js';
+import GitHubFileSystem, { loadGitHubFSConfig, initOctokit } from './GitHubFileSystem.js';
+import { isBrowser } from './platform/index.js';
+
+// Module-level singleton for GitHubFileSystem instance
+let _githubFS = null;
 
 /**
  * Get or create a GitHubFileSystem instance
- * @returns {GitHubFileSystem}
+ * @returns {Promise<GitHubFileSystem>}
  */
-function getFS() {
+async function getFS() {
   // Singleton pattern - reuse the same instance
-  if (!window._githubFS) {
-    const config = loadGitHubFSConfig();
-    window._githubFS = new GitHubFileSystem(config);
+  if (!_githubFS) {
+    await initOctokit();
+    const config = await loadGitHubFSConfig();
+    if (!config) {
+      throw new Error('GitHub FS not configured');
+    }
+    _githubFS = new GitHubFileSystem(config);
   }
-  return window._githubFS;
+  return _githubFS;
+}
+
+/**
+ * Set the GitHubFileSystem instance (useful for testing or pre-initialization)
+ * @param {GitHubFileSystem} fs
+ */
+export function setFS(fs) {
+  _githubFS = fs;
 }
 
 /**
@@ -37,7 +55,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         const file = await fs.readFile(params.path);
         return `File: ${file.path}\nSize: ${file.size} bytes\n\nContent:\n${file.content}`;
       } catch (error) {
@@ -69,7 +87,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         const file = await fs.writeFile(params.path, params.content, params.message);
         return `✓ File written successfully: ${file.path}\nSize: ${file.size} bytes\nSHA: ${file.sha}`;
       } catch (error) {
@@ -97,7 +115,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         await fs.deleteFile(params.path, params.message);
         return `✓ File deleted successfully: ${params.path}`;
       } catch (error) {
@@ -120,7 +138,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         const entries = await fs.listDirectory(params.path || '');
         
         if (entries.length === 0) {
@@ -177,7 +195,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         const results = await fs.searchCode(params.query, {
           extension: params.extension,
           path: params.path
@@ -215,7 +233,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         const exists = await fs.exists(params.path);
         return exists ? `✓ Path exists: ${params.path}` : `✗ Path does not exist: ${params.path}`;
       } catch (error) {
@@ -239,7 +257,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         await fs.createDirectory(params.path);
         return `✓ Directory created: ${params.path}/ (with .gitkeep file)`;
       } catch (error) {
@@ -257,7 +275,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         const files = await fs.getTree(true);
         
         if (files.length === 0) {
@@ -297,7 +315,7 @@ export const githubFSTools = [
     },
     execute: async (params) => {
       try {
-        const fs = getFS();
+        const fs = await getFS();
         const info = await fs.getRepoInfo();
         return `Repository: ${info.fullName}
 Description: ${info.description || 'No description'}

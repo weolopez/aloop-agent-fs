@@ -1,15 +1,18 @@
 // agent-shell.js
-// Continuous conversation mode for browser
+// Continuous conversation mode for browser and CLI
 // Provides an interactive shell instead of one-shot execution
 // Now includes memory system for persistent context across sessions
+//
+// Platform-agnostic: works in both browser and Node.js
 
 import AgentLoopGitHub from './AgentLoop-GitHub.js';
-import { GitHubFileSystem, loadGitHubFSConfig } from './GitHubFileSystem.js';
+import { GitHubFileSystem, loadGitHubFSConfig, initOctokit } from './GitHubFileSystem.js';
 import { SessionManager } from './session-manager.js';
 import { UserProfile } from './user-profile.js';
 import { MemoryManager } from './memory-manager.js';
 import { analyzeGoal, formatGoalConfirmation, shouldConfirm } from './goal-alignment.js';
 import { PERSONA, logWithPersona } from './persona.js';
+import { getPlatform } from './platform/index.js';
 
 /**
  * @typedef {Object} ShellOptions
@@ -61,8 +64,14 @@ export class AgentShell {
     try {
       logWithPersona('Initializing...', 'info');
       
-      // Load GitHub FS configuration
-      const config = loadGitHubFSConfig();
+      // Ensure platform is loaded
+      await getPlatform();
+      
+      // Initialize Octokit before loading config
+      await initOctokit();
+      
+      // Load GitHub FS configuration (now async)
+      const config = await loadGitHubFSConfig();
       if (!config) {
         throw new Error('GitHub FS not configured. Please set up your GitHub token and repository.');
       }

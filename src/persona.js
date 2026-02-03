@@ -1,6 +1,20 @@
 // persona.js
 // Defines the agent's identity, values, and communication style
 // This transforms the agent from a generic "AI assistant" to "Navigator" - a distinct character
+//
+// Platform-agnostic: works in both browser and Node.js
+
+import { getPlatform, isBrowser, isNode } from './platform/index.js';
+
+// Platform adapter for logging (initialized lazily)
+let _platform = null;
+
+async function ensurePlatform() {
+  if (!_platform) {
+    _platform = await getPlatform();
+  }
+  return _platform;
+}
 
 /**
  * The agent's core personality definition
@@ -132,33 +146,70 @@ function getUserContextForPrompt(profile) {
 
 /**
  * Log a message with Navigator's personality
+ * Uses platform-specific styling (CSS in browser, ANSI in terminal)
  * @param {string} message - The message to log
  * @param {string} type - Message type: thought, action, success, error, info
  */
 export function logWithPersona(message, type = 'info') {
-  const icons = {
-    thought: 'bulb',
-    action: 'wrench',
-    success: 'check',
-    error: 'x',
-    info: 'compass',
-    warning: 'warning',
-    exploring: 'mag'
-  };
+  // Synchronous fallback for when platform isn't initialized yet
+  if (!_platform) {
+    // Use simple console.log as fallback
+    const prefix = `[${PERSONA.name}]`;
+    
+    if (isBrowser) {
+      // Browser styling
+      const colors = {
+        thought: '#a78bfa',
+        action: '#60a5fa',
+        success: '#34d399',
+        error: '#f87171',
+        info: '#94a3b8',
+        warning: '#fbbf24',
+        exploring: '#38bdf8'
+      };
+      const color = colors[type] || colors.info;
+      console.log(`%c${prefix} ${message}`, `color: ${color}; font-weight: bold;`);
+    } else {
+      // Node.js ANSI styling
+      const ANSI = {
+        reset: '\x1b[0m',
+        bold: '\x1b[1m',
+        purple: '\x1b[35m',
+        blue: '\x1b[34m',
+        green: '\x1b[32m',
+        red: '\x1b[31m',
+        gray: '\x1b[90m',
+        yellow: '\x1b[33m',
+        cyan: '\x1b[36m'
+      };
+      const styles = {
+        thought: ANSI.purple,
+        action: ANSI.blue,
+        success: ANSI.green,
+        error: ANSI.red,
+        info: ANSI.gray,
+        warning: ANSI.yellow,
+        exploring: ANSI.cyan
+      };
+      const style = styles[type] || styles.info;
+      console.log(`${style}${ANSI.bold}${prefix}${ANSI.reset}${style} ${message}${ANSI.reset}`);
+    }
+    return;
+  }
   
-  const colors = {
-    thought: '#a78bfa',   // purple
-    action: '#60a5fa',    // blue
-    success: '#34d399',   // green
-    error: '#f87171',     // red
-    info: '#94a3b8',      // gray
-    warning: '#fbbf24',   // yellow
-    exploring: '#38bdf8'  // light blue
-  };
+  // Use platform logging when available
+  const logFn = _platform.log[type] || _platform.log.info;
+  logFn.call(_platform.log, message);
+}
 
-  // Console styling for browser
-  const style = `color: ${colors[type] || colors.info}; font-weight: bold;`;
-  console.log(`%c[${PERSONA.name}] ${message}`, style);
+/**
+ * Async version of logWithPersona that ensures platform is loaded
+ * Use this when you need guaranteed platform-specific styling
+ */
+export async function logWithPersonaAsync(message, type = 'info') {
+  const platform = await ensurePlatform();
+  const logFn = platform.log[type] || platform.log.info;
+  logFn.call(platform.log, message);
 }
 
 /**
