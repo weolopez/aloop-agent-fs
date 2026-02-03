@@ -62,18 +62,46 @@ export class GitHubFileSystem {
   async _setupWorkingBranch() {
     const timestamp = Date.now();
     const workingBranchName = `agent-workspace-${timestamp}`;
-    
+
+    // First try the timestamped name
     try {
       await this.createBranch(workingBranchName, this.config.branch);
       this.workingBranch = workingBranchName;
+      return;
     } catch (error) {
-      // If branch creation fails, try a simpler name
-      const simpleName = 'agent-workspace';
+      console.log(`Failed to create timestamped branch '${workingBranchName}': ${error.message}`);
+    }
+
+    // If timestamped name fails, try a simple name with retry
+    for (let i = 0; i < 5; i++) {
+      const simpleName = i === 0 ? 'agent-workspace' : `agent-workspace-${i}`;
+
       try {
+        // Check if branch already exists
+        const branches = await this.listBranches();
+        const existingBranch = branches.find(b => b.name === simpleName);
+
+        if (existingBranch) {
+          // If branch exists and is not protected, use it
+          if (!existingBranch.protected) {
+            console.log(`Using existing working branch: ${simpleName}`);
+            this.workingBranch = simpleName;
+            return;
+          } else {
+            // Branch exists but is protected, try next name
+            continue;
+          }
+        }
+
+        // Branch doesn't exist, try to create it
         await this.createBranch(simpleName, this.config.branch);
         this.workingBranch = simpleName;
-      } catch (secondError) {
-        throw new Error(`Cannot create working branch: ${secondError.message}`);
+        return;
+      } catch (error) {
+        console.log(`Failed to create/use branch '${simpleName}': ${error.message}`);
+        if (i === 4) {
+          throw new Error(`Cannot create working branch after ${i + 1} attempts: ${error.message}`);
+        }
       }
     }
   }
@@ -171,31 +199,57 @@ export class GitHubFileSystem {
     message = message || `Update ${path}`;
     this._cache.delete(`${this.workingBranch}:${path}`);
 
-    let sha = null;
-    try {
-      const existing = await this.readFile(path);
-      sha = existing.sha;
-    } catch (e) { /* File doesn't exist */ }
+    const maxRetries = 3;
+    let lastError;
 
-    const { data } = await this.octokit.rest.repos.createOrUpdateFileContents({
-      owner: this.config.owner,
-      repo: this.config.repo,
-      path,
-      message,
-      content: platform.encoding.base64Encode(content),
-      branch: this.workingBranch,
-      sha,
-      committer: { name: this.config.owner, email: this.config.email }
-    });
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Always get fresh SHA to avoid conflicts
+        let sha = null;
+        try {
+          const existing = await this.readFile(path);
+          sha = existing.sha;
+        } catch (e) {
+          // File doesn't exist, sha remains null
+        }
 
-    return {
-      path: data.content.path,
-      name: data.content.name,
-      content,
-      sha: data.content.sha,
-      type: 'file',
-      size: data.content.size
-    };
+        const { data } = await this.octokit.rest.repos.createOrUpdateFileContents({
+          owner: this.config.owner,
+          repo: this.config.repo,
+          path,
+          message,
+          content: platform.encoding.base64Encode(content),
+          branch: this.workingBranch,
+          sha,
+          committer: { name: this.config.owner, email: this.config.email }
+        });
+
+        return {
+          path: data.content.path,
+          name: data.content.name,
+          content,
+          sha: data.content.sha,
+          type: 'file',
+          size: data.content.size
+        };
+      } catch (error) {
+        lastError = error;
+
+        // If it's a SHA mismatch error and we haven't exhausted retries, continue
+        if (error.status === 409 && error.message.includes('does not match') && attempt < maxRetries - 1) {
+          console.log(`SHA conflict for ${path}, retrying (attempt ${attempt + 1}/${maxRetries})...`);
+          // Clear cache to ensure we get fresh data on next read
+          this._cache.delete(`${this.workingBranch}:${path}`);
+          continue;
+        }
+
+        // For other errors or exhausted retries, throw
+        throw error;
+      }
+    }
+
+    // This should never be reached, but just in case
+    throw lastError;
   }
 
   async deleteFile(path, message) {

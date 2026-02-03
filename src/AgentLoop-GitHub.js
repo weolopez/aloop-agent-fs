@@ -173,6 +173,13 @@ CONVERSATION HISTORY:
   async callLLM(prompt) {
     try {
       const msg = await fetchGemini(prompt);
+      
+      // Check if the response has the expected structure
+      if (!msg || !msg.candidates || !msg.candidates[0] || !msg.candidates[0].content || !msg.candidates[0].content.parts || !msg.candidates[0].content.parts[0]) {
+        console.error("Unexpected Gemini API response structure:", JSON.stringify(msg, null, 2));
+        throw new Error(`Invalid Gemini API response structure. Response: ${JSON.stringify(msg)}`);
+      }
+      
       return msg.candidates[0].content.parts[0].text;
     } catch (e) {
       console.error("LLM Call failed", e);

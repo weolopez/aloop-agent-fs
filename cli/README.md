@@ -1,6 +1,6 @@
-# Navigator CLI
+# Codie CLI
 
-Command-line interface for the Navigator AI agent. Navigator uses GitHub as a persistent filesystem and Google Gemini as the LLM, giving you an AI assistant that remembers everything and can manage files across sessions.
+Command-line interface for the Codie AI agent. Codie uses GitHub as a persistent filesystem and Google Gemini as the LLM, giving you an AI assistant that remembers everything and can manage files across sessions.
 
 ## Features
 
@@ -9,6 +9,27 @@ Command-line interface for the Navigator AI agent. Navigator uses GitHub as a pe
 - **Same Agent, Two Interfaces** - Identical capabilities whether using browser or CLI
 - **Interactive Mode** - Full REPL with colored output and thinking indicators
 - **Non-interactive Mode** - Run single tasks via command line for scripting
+- **OpenCode Integration** - Programmatic API for integration with other tools
+
+## OpenCode Integration
+
+Codie provides a programmatic API for integration with other tools like OpenCode:
+
+```javascript
+import { runQuickTask, createCodie } from 'aloop/lib/codie-api.js';
+
+// Quick task execution
+const result = await runQuickTask('Design a REST API for user management');
+
+// Advanced integration with persistent memory
+const codie = await createCodie();
+await codie.initialize();
+await codie.remember('User prefers TypeScript', 'Preference');
+const advice = await codie.runTask('Suggest TypeScript patterns for this codebase');
+await codie.cleanup();
+```
+
+See [CODIE_INTEGRATION.md](../docs/CODIE_INTEGRATION.md) for detailed integration documentation.
 
 ## Quick Start
 
@@ -59,7 +80,7 @@ This starts an interactive session where you can chat with the agent:
 ```
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   🧭  Navigator CLI                                       ║
+║   🦞  Codie CLI                                           ║
 ║   Your persistent companion for the digital frontier      ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝

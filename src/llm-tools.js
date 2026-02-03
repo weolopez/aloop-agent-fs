@@ -130,7 +130,17 @@ export async function fetchGemini(text = '', systemPrompt = null, canvasTools = 
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
   );
-  return await res.json();
+
+  const response = await res.json();
+
+  // Check if the response indicates an error
+  if (!res.ok || response.error) {
+    const errorMsg = response.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+    console.error("Gemini API error:", errorMsg);
+    throw new Error(`Gemini API error: ${errorMsg}`);
+  }
+
+  return response;
 }
 
 

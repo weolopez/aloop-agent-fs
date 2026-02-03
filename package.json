@@ -1,17 +1,18 @@
 {
   "name": "aloop",
   "version": "1.0.0",
-  "description": "Navigator - AI agent with persistent memory using GitHub as filesystem",
+  "description": "Codie - AI agent with persistent memory using GitHub as filesystem",
   "type": "module",
   "main": "src/agent-shell.js",
   "bin": {
     "aloop": "./cli/index.js",
-    "navigator": "./cli/index.js"
+    "codie": "./cli/index.js"
   },
   "scripts": {
     "start": "node cli/index.js",
     "setup": "node cli/index.js --setup",
-    "cli": "node cli/index.js"
+    "cli": "node cli/index.js",
+    "test:integration": "node test-codie-integration.js"
   },
   "keywords": [
     "ai",
@@ -41,6 +42,7 @@
   "files": [
     "src/",
     "cli/",
+    "lib/",
     "memory/",
     "docs/"
   ]

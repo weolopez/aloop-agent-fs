@@ -449,9 +449,9 @@
 <body>
     <div class="container">
         <h1>
-            <span class="icon">🧭</span>
-            Navigator
-            <span class="tagline">Your persistent AI companion</span>
+            <span class="icon">🦞</span>
+            Codie
+            <span class="tagline">Your witty, passionate coding companion</span>
         </h1>
         
         <div id="status" class="status pending">
@@ -642,14 +642,14 @@
 
         async function initializeShell(config) {
             statusDiv.className = 'status pending';
-            statusDiv.textContent = '⏳ Initializing Navigator...';
+            statusDiv.textContent = '⏳ Initializing Codie...';
             
             try {
                 shell = new AgentShell({
                     onReady: (info) => {
                         greetingEl.textContent = info.greeting;
                         sessionInfoEl.textContent = `Session: ${info.sessionId} (${info.messageCount} messages)`;
-                        addChatMessage('system', `🧭 Navigator is ready. ${info.greeting}`);
+                        addChatMessage('system', `🦞 Codie is ready. ${info.greeting}`);
                     },
                     onMessage: (msg) => {
                         addChatMessage(msg.role, msg.content);

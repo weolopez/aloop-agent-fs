@@ -108,18 +108,37 @@ export class SessionManager {
     const path = `${this.options.sessionPath}/${this.currentSession.id}.json`;
     const message = commitMessage || `Update session ${this.currentSession.id}`;
     
-    try {
-      await this.fs.writeFile(
-        path,
-        JSON.stringify(this.currentSession, null, 2),
-        message
-      );
-      this.isDirty = false;
-      logWithPersona(`Session saved (${this.currentSession.messageCount} messages)`, 'success');
-    } catch (error) {
-      logWithPersona(`Failed to save session: ${error.message}`, 'error');
-      throw error;
+    // Retry on conflicts
+    const maxRetries = 3;
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        await this.fs.writeFile(
+          path,
+          JSON.stringify(this.currentSession, null, 2),
+          message
+        );
+        this.isDirty = false;
+        logWithPersona(`Session saved (${this.currentSession.messageCount} messages)`, 'success');
+        return;
+      } catch (error) {
+        lastError = error;
+        
+        // If it's a SHA conflict and we haven't exhausted retries, wait and retry
+        if (error.message?.includes('does not match') && attempt < maxRetries - 1) {
+          logWithPersona(`Session save conflict, retrying (attempt ${attempt + 1}/${maxRetries})...`, 'warning');
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+          continue;
+        }
+        
+        // For other errors or exhausted retries, throw
+        break;
+      }
     }
+    
+    logWithPersona(`Failed to save session after ${maxRetries} attempts: ${lastError.message}`, 'error');
+    throw lastError;
   }
 
   /**

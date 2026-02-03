@@ -32,6 +32,13 @@ import {
   RelayMessageTool
 } from './implementations/relay-tools.js';
 
+import {
+  DelegateTaskTool,
+  AskCodieTool,
+  CodieMemoryTool,
+  AnalyzeTaskComplexityTool
+} from './implementations/codie-tools.js';
+
 /**
  * All available tools organized by category
  */
@@ -58,9 +65,15 @@ export const toolsByCategory = {
   search: {
     searchCode: SearchCodeTool
   },
-  relay: {
-    relayMessage: RelayMessageTool
-  }
+   relay: {
+     relayMessage: RelayMessageTool
+   },
+    codie: {
+      delegateTask: DelegateTaskTool,
+      askCodie: AskCodieTool,
+      codieMemory: CodieMemoryTool,
+      analyzeTaskComplexity: AnalyzeTaskComplexityTool
+    }
 };
 
 /**
@@ -89,8 +102,14 @@ export const allTools = {
   // Search operations
   searchCode: SearchCodeTool,
 
-  // Relay operations
-  relayMessage: RelayMessageTool
+   // Relay operations
+   relayMessage: RelayMessageTool,
+
+    // Codie operations
+    delegateTask: DelegateTaskTool,
+    askCodie: AskCodieTool,
+    codieMemory: CodieMemoryTool,
+    analyzeTaskComplexity: AnalyzeTaskComplexityTool
 };
 
 /**
