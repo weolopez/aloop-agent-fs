@@ -172,6 +172,17 @@ export async function getApiKey(keyName = 'GEMINI_API_KEY') {
   // Try environment variable first
   let apiKey = platform.env.get(keyName);
   
+  // If not found, try config file (check both nested and flat structures for compatibility)
+  if (!apiKey) {
+    const config = platform.config.load();
+    if (config?.gemini?.apiKey) {
+      apiKey = config.gemini.apiKey;
+    } else if (config?.geminiApiKey) {
+      // Flat structure fallback
+      apiKey = config.geminiApiKey;
+    }
+  }
+  
   // If not found and in browser, prompt user
   if (!apiKey && isBrowser) {
     apiKey = await platform.prompt.text(`Please enter your ${keyName}`);
@@ -189,10 +200,17 @@ export async function getApiKey(keyName = 'GEMINI_API_KEY') {
 
 /**
  * Set API key programmatically (useful for CLI)
+ * Saves to both environment and config file for persistence
  */
 export async function setApiKey(key, keyName = 'GEMINI_API_KEY') {
   const platform = await ensurePlatform();
   platform.env.set(keyName, key);
+  
+  // Also save to config file for persistence
+  const config = platform.config.load() || {};
+  config.gemini = config.gemini || {};
+  config.gemini.apiKey = key;
+  platform.config.save(config);
 }
 
 // Browser-only: DOM event listener for prompt-submit
