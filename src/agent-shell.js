@@ -76,8 +76,9 @@ export class AgentShell {
         throw new Error('GitHub FS not configured. Please set up your GitHub token and repository.');
       }
       
-      // Initialize GitHub file system
-      this.fs = new GitHubFileSystem(config);
+       // Initialize GitHub file system
+       this.fs = new GitHubFileSystem(config);
+       await this.fs.initialize();
       
       // Initialize memory manager (load persistent memory from GitHub)
       this.memory = new MemoryManager(this.fs);
