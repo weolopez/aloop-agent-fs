@@ -78,22 +78,36 @@ export class GitHubFileSystem {
     }
   }
 
-  async _setupWorkingBranch() {
-    const timestamp = Date.now();
-    const workingBranchName = `agent-workspace-${timestamp}`;
-    
+  async initialize() {
     try {
-      await this.createBranch(workingBranchName, this.config.branch);
-      this.workingBranch = workingBranchName;
-    } catch (error) {
-      // If branch creation fails, try a simpler name
-      const simpleName = 'agent-workspace';
-      try {
-        await this.createBranch(simpleName, this.config.branch);
-        this.workingBranch = simpleName;
-      } catch (secondError) {
-        throw new Error(`Cannot create working branch: ${secondError.message}`);
+      const { data } = await this.octokit.rest.repos.get({
+        owner: this.config.owner,
+        repo: this.config.repo
+      });
+      console.log(`Connected to GitHub repo: ${data.full_name}`);
+      
+      // Check if target branch is protected
+      const branches = await this.listBranches();
+      const targetBranch = branches.find(b => b.name === this.config.branch);
+      
+      if (targetBranch?.protected) {
+        console.log(`Branch '${this.config.branch}' is protected. Creating working branch...`);
+        await this._setupWorkingBranch();
+        console.log(`Using working branch: ${this.workingBranch}`);
+      } else {
+        this.workingBranch = this.config.branch;
+        console.log(`Using branch: ${this.workingBranch}`);
       }
+      
+      return true;
+    } catch (error) {
+      if (error.status === 404) {
+        throw new Error(`Repository ${this.config.owner}/${this.config.repo} not found.`);
+      }
+      if (error.status === 401) {
+        throw new Error('Authentication failed. Check your GitHub token.');
+      }
+      throw new Error(`Failed to connect to GitHub: ${error.message}`);
     }
   }
 
