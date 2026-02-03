@@ -1,11 +1,48 @@
 // GitHubFileSystem.js
 // Low-level GitHub API wrapper for file system operations
 // Tool descriptions and documentation are in src/tools/descriptions/*.md
+// 
+// Platform-agnostic: works in both browser and Node.js
 
-import { Octokit } from "https://esm.sh/octokit";
+import { getPlatform, isNode } from './platform/index.js';
+
+// Dynamic Octokit import - ESM CDN for browser, npm package for Node
+let Octokit;
+
+/**
+ * Initialize Octokit based on platform
+ * Must be called before creating GitHubFileSystem instances in Node.js
+ */
+export async function initOctokit() {
+  if (Octokit) return;
+  
+  if (isNode) {
+    // Node.js: use npm package
+    const module = await import('octokit');
+    Octokit = module.Octokit;
+  } else {
+    // Browser: use ESM CDN
+    const module = await import('https://esm.sh/octokit');
+    Octokit = module.Octokit;
+  }
+}
+
+// Platform adapter instance (initialized lazily)
+let _platform = null;
+
+async function ensurePlatform() {
+  if (!_platform) {
+    _platform = await getPlatform();
+  }
+  return _platform;
+}
 
 export class GitHubFileSystem {
   constructor(config) {
+    if (!Octokit) {
+      throw new Error('Octokit not initialized. Call await initOctokit() first.');
+    }
+    
     this.config = {
       owner: config.owner,
       repo: config.repo,
@@ -60,6 +97,7 @@ export class GitHubFileSystem {
   // ===========================================================================
 
   async readFile(path) {
+    const platform = await ensurePlatform();
     const cacheKey = `${this.config.branch}:${path}`;
     if (this._cache.has(cacheKey)) {
       return this._cache.get(cacheKey);
@@ -80,7 +118,7 @@ export class GitHubFileSystem {
       const fileEntry = {
         path: data.path,
         name: data.name,
-        content: data.content ? atob(data.content.replace(/\n/g, '')) : '',
+        content: data.content ? platform.encoding.base64Decode(data.content) : '',
         sha: data.sha,
         type: 'file',
         size: data.size
@@ -95,6 +133,7 @@ export class GitHubFileSystem {
   }
 
   async writeFile(path, content, message) {
+    const platform = await ensurePlatform();
     message = message || `Update ${path}`;
     this._cache.delete(`${this.config.branch}:${path}`);
 
@@ -109,7 +148,7 @@ export class GitHubFileSystem {
       repo: this.config.repo,
       path,
       message,
-      content: btoa(unescape(encodeURIComponent(content))),
+      content: platform.encoding.base64Encode(content),
       branch: this.config.branch,
       sha,
       committer: { name: this.config.owner, email: this.config.email }
@@ -402,41 +441,119 @@ export class GitHubFileSystem {
 // HELPER FUNCTIONS
 // ===========================================================================
 
-export function loadGitHubFSConfig() {
+/**
+ * Load GitHub FS configuration from platform storage
+ * @returns {Object|null} Configuration object or null if not configured
+ */
+export async function loadGitHubFSConfig() {
+  const platform = await ensurePlatform();
+  const config = platform.config.load();
+  if (!config) {
+    return null;
+  }
+  return config;
+}
+
+/**
+ * Load GitHub FS configuration synchronously (browser only, for backwards compat)
+ * @deprecated Use loadGitHubFSConfig() instead
+ */
+export function loadGitHubFSConfigSync() {
+  if (isNode) {
+    throw new Error('loadGitHubFSConfigSync is not available in Node.js. Use await loadGitHubFSConfig() instead.');
+  }
   const saved = localStorage.getItem('github-fs-config');
   if (!saved) {
-    throw new Error('GitHub file system not configured.');
+    return null;
   }
   return JSON.parse(saved);
 }
 
-export function saveGitHubFSConfig(config) {
-  localStorage.setItem('github-fs-config', JSON.stringify(config));
+/**
+ * Save GitHub FS configuration to platform storage
+ * @param {Object} config - Configuration to save
+ */
+export async function saveGitHubFSConfig(config) {
+  const platform = await ensurePlatform();
+  platform.config.save(config);
 }
 
+/**
+ * Interactive setup for GitHub FS
+ * Works in both browser (prompts) and Node.js (readline)
+ */
 export async function setupGitHubFS() {
+  const platform = await ensurePlatform();
+  
   console.log('=== GitHub File System Setup ===');
   
-  const owner = prompt('GitHub username/organization:', localStorage.getItem('github-fs-owner') || '');
-  const repo = prompt('Repository name:', localStorage.getItem('github-fs-repo') || 'agent-workspace');
-  const branch = prompt('Branch name:', 'main');
-  const auth = prompt('GitHub Personal Access Token (needs repo scope):', '');
-  const email = prompt('Your email (for commits):', 'agent@example.com');
+  // Try to load existing config for defaults
+  const existing = platform.config.load() || {};
+  
+  const owner = await platform.prompt.text(
+    'GitHub username/organization', 
+    existing.owner || platform.env.get('GITHUB_OWNER', '')
+  );
+  
+  const repo = await platform.prompt.text(
+    'Repository name', 
+    existing.repo || platform.env.get('GITHUB_REPO', 'agent-workspace')
+  );
+  
+  const branch = await platform.prompt.text(
+    'Branch name', 
+    existing.branch || 'main'
+  );
+  
+  const auth = await platform.prompt.text(
+    'GitHub Personal Access Token (needs repo scope)', 
+    platform.env.get('GITHUB_TOKEN', '')
+  );
+  
+  const email = await platform.prompt.text(
+    'Your email (for commits)', 
+    existing.email || 'agent@example.com'
+  );
 
   if (!owner || !repo || !auth) {
     throw new Error('Owner, repo, and auth token are required');
   }
 
   const config = { owner, repo, branch, auth, email };
+  
+  // Initialize Octokit if needed
+  await initOctokit();
+  
   const fs = new GitHubFileSystem(config);
   
   await fs.initialize();
-  saveGitHubFSConfig(config);
-  localStorage.setItem('github-fs-owner', owner);
-  localStorage.setItem('github-fs-repo', repo);
+  await saveGitHubFSConfig(config);
   
   console.log('✅ GitHub File System configured!');
   return fs;
+}
+
+/**
+ * Create GitHubFileSystem from environment variables (useful for CLI)
+ * Looks for: GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH, GITHUB_EMAIL
+ */
+export async function createFromEnv() {
+  const platform = await ensurePlatform();
+  
+  const config = {
+    auth: platform.env.get('GITHUB_TOKEN'),
+    owner: platform.env.get('GITHUB_OWNER'),
+    repo: platform.env.get('GITHUB_REPO'),
+    branch: platform.env.get('GITHUB_BRANCH', 'main'),
+    email: platform.env.get('GITHUB_EMAIL', 'agent@localhost')
+  };
+  
+  if (!config.auth || !config.owner || !config.repo) {
+    return null;
+  }
+  
+  await initOctokit();
+  return new GitHubFileSystem(config);
 }
 
 export default GitHubFileSystem;

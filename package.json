@@ -1,0 +1,47 @@
+{
+  "name": "aloop",
+  "version": "1.0.0",
+  "description": "Navigator - AI agent with persistent memory using GitHub as filesystem",
+  "type": "module",
+  "main": "src/agent-shell.js",
+  "bin": {
+    "aloop": "./cli/index.js",
+    "navigator": "./cli/index.js"
+  },
+  "scripts": {
+    "start": "node cli/index.js",
+    "setup": "node cli/index.js --setup",
+    "cli": "node cli/index.js"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "gemini",
+    "github",
+    "cli",
+    "assistant"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "octokit": "^3.1.0"
+  },
+  "optionalDependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/aloop.git"
+  },
+  "files": [
+    "src/",
+    "cli/",
+    "memory/",
+    "docs/"
+  ]
+}

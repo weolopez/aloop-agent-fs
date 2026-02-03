@@ -5,6 +5,19 @@
     events: { eventName: "event", ... }
    }
  ********************/
+
+import { getPlatform, isBrowser } from './platform/index.js';
+
+// Platform adapter instance (initialized lazily)
+let _platform = null;
+
+async function ensurePlatform() {
+  if (!_platform) {
+    _platform = await getPlatform();
+  }
+  return _platform;
+}
+
 export function discoverAPI(tagName) {
   const constructor = customElements.get(tagName);
   if (!constructor) return;
@@ -88,6 +101,7 @@ export function buildGeminiTools(containerSelector = '#canvas', root = document)
 }
 
 export async function fetchGemini(text = '', systemPrompt = null, canvasTools = [], context = []) {
+  const platform = await ensurePlatform();
 
   const payload = {
     contents: [],
@@ -111,9 +125,9 @@ export async function fetchGemini(text = '', systemPrompt = null, canvasTools = 
 
   payload.contents.push({ role: 'user', parts: [{ text }] });
 
-  const apiKey = getApiKey();
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
+  const apiKey = await getApiKey();
+  const res = await platform.http.fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
   );
   return await res.json();
@@ -152,18 +166,40 @@ export function executeTool(cmd, root = document) {
   return `${element.tagName.toLowerCase()}: ${attr} set to ${cmd.args.value}`;
 }
 
-export function getApiKey(keyName = 'GEMINI_API_KEY') {
-  let apiKey = localStorage.getItem(keyName);
-  if (!apiKey) {
-    apiKey = prompt(`Please enter your ${keyName}:`);
+export async function getApiKey(keyName = 'GEMINI_API_KEY') {
+  const platform = await ensurePlatform();
+  
+  // Try environment variable first
+  let apiKey = platform.env.get(keyName);
+  
+  // If not found and in browser, prompt user
+  if (!apiKey && isBrowser) {
+    apiKey = await platform.prompt.text(`Please enter your ${keyName}`);
     if (apiKey) {
-      localStorage.setItem(keyName, apiKey);
+      platform.env.set(keyName, apiKey);
     }
   }
+  
+  if (!apiKey) {
+    throw new Error(`API key ${keyName} not found. Set it via environment variable or call setApiKey().`);
+  }
+  
   return apiKey;
 }
 
-document.addEventListener('prompt-submit', async (e) => {
-  const result = await routeCommand(e.detail.prompt, '#canvas', e.target.activeElement.canvas.shadowRoot);
-  document.dispatchEvent(new CustomEvent('tool-executed', { detail: { result, timestamp: Date.now() } }));
-});
+/**
+ * Set API key programmatically (useful for CLI)
+ */
+export async function setApiKey(key, keyName = 'GEMINI_API_KEY') {
+  const platform = await ensurePlatform();
+  platform.env.set(keyName, key);
+}
+
+// Browser-only: DOM event listener for prompt-submit
+// Only register if we're in a browser environment
+if (isBrowser && typeof document !== 'undefined') {
+  document.addEventListener('prompt-submit', async (e) => {
+    const result = await routeCommand(e.detail.prompt, '#canvas', e.target.activeElement.canvas.shadowRoot);
+    document.dispatchEvent(new CustomEvent('tool-executed', { detail: { result, timestamp: Date.now() } }));
+  });
+}

@@ -581,9 +581,10 @@
     </div>
 
     <script type="module">
-        import GitHubFileSystem, { saveGitHubFSConfig, loadGitHubFSConfig, setupGitHubFS } from './src/GitHubFileSystem.js';
+        import GitHubFileSystem, { saveGitHubFSConfig, loadGitHubFSConfig, loadGitHubFSConfigSync, setupGitHubFS, initOctokit } from './src/GitHubFileSystem.js';
         import AgentLoopGitHub from './src/AgentLoop-GitHub.js';
         import { AgentShell } from './src/agent-shell.js';
+        import { initPlatform } from './src/platform/index.js';
 
         // DOM elements
         const statusDiv = document.getElementById('status');
@@ -618,7 +619,11 @@
         // Check if already configured
         async function checkConfiguration() {
             try {
-                const config = loadGitHubFSConfig();
+                // Initialize platform first
+                await initPlatform();
+                await initOctokit();
+                
+                const config = await loadGitHubFSConfig();
                 const geminiKey = localStorage.getItem('GEMINI_API_KEY');
                 
                 if (config && geminiKey) {
@@ -844,9 +849,9 @@
         });
 
         // View repository
-        viewRepoBtn.addEventListener('click', () => {
+        viewRepoBtn.addEventListener('click', async () => {
             try {
-                const config = loadGitHubFSConfig();
+                const config = await loadGitHubFSConfig();
                 window.open(`https://github.com/${config.owner}/${config.repo}`, '_blank');
             } catch (error) {
                 alert(error.message);
